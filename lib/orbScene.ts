@@ -40,6 +40,9 @@ export class OrbScene {
   
   private animationFrameId?: number;
 
+  // Added for throttling the React state updates
+  private lastBrightnessTime: number = 0; 
+
   constructor(container: HTMLDivElement) {
     this.container = container;
     this.init();
@@ -184,15 +187,12 @@ export class OrbScene {
       opacity: 0.7,
       blending: THREE.AdditiveBlending
     });
-    // Radius 0.24 is outside the 0.20 shell
     const outerRingGeo = new THREE.TorusGeometry(0.24, 0.002, 16, 64);
 
     for (let i = 0; i < 3; i++) {
       const outerRing = new THREE.Mesh(outerRingGeo, outerRingMat);
-      // Give each ring a random initial tilt
       outerRing.rotation.x = Math.random() * Math.PI;
       outerRing.rotation.y = Math.random() * Math.PI;
-      
       this.outerRings.push(outerRing);
       this.handGlobe.add(outerRing);
     }
@@ -211,7 +211,7 @@ export class OrbScene {
     }
     dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
     const dustMaterial = new THREE.PointsMaterial({
-      color: 0x00ccff, // Blue ambient dust to match energy
+      color: 0x00ccff, 
       size: 0.015,
       transparent: true,
       opacity: 0.4,
@@ -249,15 +249,13 @@ export class OrbScene {
       ring.rotation.z -= 0.05 + (i * 0.01);
     });
 
-    // --- Outer Rings Animation Logic ---
-    // Spin outer rings in an aggressive, chaotic pattern
+    // Spin outer rings
     this.outerRings.forEach((ring, i) => {
       ring.rotation.x += 0.06 + (i * 0.015);
       ring.rotation.y += 0.09 + (i * 0.02);
       ring.rotation.z -= 0.04 + (i * 0.01);
     });
     
-    // Slow drift for the background ambient dust
     this.dustSystem.rotation.y = time * 0.05;
 
     this.renderer.render(this.scene, this.camera);
@@ -289,13 +287,35 @@ export class OrbScene {
       return new THREE.Vector3(x, y, z);
     });
 
-    const indexBase = trackedPoints[5];
+    // --- NEW: 10% BASELINE BRIGHTNESS MATH ---
+   const indexBase = trackedPoints[5];
     const pinkyBase = trackedPoints[17];
-    
     const rollAngle = Math.atan2(pinkyBase.y - indexBase.y, pinkyBase.x - indexBase.x);
-    const rotationMultiplier = Math.abs(rollAngle) / Math.PI;
-    const zoomScale = 1.0 + (rotationMultiplier * 2.5); 
+    
+    let intensity = 0.10; // Default resting state is 10%
 
+    if (rollAngle < 0) {
+      intensity = 0.10 + Math.min(Math.abs(rollAngle) / 1.5, 1.0) * 0.90;
+    } else {
+      intensity = 0.10 - Math.min(rollAngle / 0.5, 1.0) * 0.10;
+    }
+
+    // Clamp between 0.0 and 1.0
+    intensity = Math.max(0, Math.min(1.0, intensity));
+
+    // Scale the globe directly off intensity
+    const zoomScale = 0.5 + (intensity * 2.5);
+
+    const now = Date.now();
+    // Throttle the event to fire 10 times a second max, preventing lag
+    if (now - this.lastBrightnessTime > 100) {
+      window.dispatchEvent(new CustomEvent('mtron-brightness', {
+        detail: { intensity: intensity } 
+      }));
+      this.lastBrightnessTime = now;
+    }
+
+    // --- RENDER JOINTS & BONES ---
     trackedPoints.forEach((point: THREE.Vector3, i: number) => {
       this.innerJoints[i].position.copy(point);
       this.outerJoints[i].position.copy(point);
@@ -326,6 +346,7 @@ export class OrbScene {
       innerBone.visible = true;
     });
 
+    // --- RENDER WEBBING ---
     const webArray = this.webGeometry.attributes.position.array as Float32Array;
     const p0 = trackedPoints[0]; 
     const p2 = trackedPoints[2]; 
@@ -349,6 +370,7 @@ export class OrbScene {
     this.webInnerMesh.visible = true;
     this.webOuterMesh.visible = true;
 
+    // --- POSITION GLOBE ---
     const avgX = centerX / 21;
     const avgY = centerY / 21;
     const avgZ = centerZ / 21;

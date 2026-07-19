@@ -1,29 +1,63 @@
 import * as THREE from 'three';
 
 export class GestureEngine {
-  // Thresholds for gesture detection
-  private static PINCH_THRESHOLD = 0.05;
+  private static PINCH_THRESHOLD = 0.15;
+  private static lastGesture: string = 'NONE';
+  private static cooldownUntil: number = 0;
 
   public static getGesture(points: THREE.Vector3[]): 'NONE' | 'PINCH' | 'FIST' {
     if (!points || points.length < 21) return 'NONE';
 
-    // 1. PINCH: Check distance between thumb tip (4) and index tip (8)
+    const now = Date.now();
+    let currentGesture: 'NONE' | 'PINCH' | 'FIST' = 'NONE';
+
+    // 1. PINCH DETECTION
     const distThumbIndex = points[4].distanceTo(points[8]);
     if (distThumbIndex < this.PINCH_THRESHOLD) {
-      return 'PINCH';
+      currentGesture = 'PINCH';
+    } 
+    else {
+      // 2. FORGIVING FIST DETECTION
+      const wrist = points[0];
+      
+      // Calculate base knuckle distances to the wrist
+      const indexKnuckleDist = points[5].distanceTo(wrist);
+      const middleKnuckleDist = points[9].distanceTo(wrist);
+      
+      // Calculate fingertip distances to the wrist
+      const indexTipDist = points[8].distanceTo(wrist);
+      const middleTipDist = points[12].distanceTo(wrist);
+
+      // In an open hand, the ratio is ~1.8x to 2.0x.
+      // We use 1.25x as a generous threshold so relaxed fists trigger perfectly.
+      const isIndexClosed = indexTipDist < (indexKnuckleDist * 1.25);
+      const isMiddleClosed = middleTipDist < (middleKnuckleDist * 1.25);
+
+      // UNCOMMENT THIS LINE IF IT FAILS AGAIN TO SEE THE EXACT NUMBERS:
+      // console.log(`Index: ${(indexTipDist/indexKnuckleDist).toFixed(2)}, Middle: ${(middleTipDist/middleKnuckleDist).toFixed(2)}`);
+
+      if (isIndexClosed && isMiddleClosed) {
+        currentGesture = 'FIST';
+      }
     }
 
-    // 2. FIST: Check if finger tips are closer to palm center (9) than the middle joints
-    const palm = points[9];
-    const fingersClosed = [8, 12, 16, 20].every(tipIdx => {
-      const jointIdx = tipIdx - 2;
-      return points[tipIdx].distanceTo(palm) < points[jointIdx].distanceTo(palm);
-    });
-
-    if (fingersClosed) {
-      return 'FIST';
+    // 3. EVENT DISPATCH
+    if (currentGesture !== 'NONE') {
+      if (now > this.cooldownUntil && this.lastGesture !== currentGesture) {
+        console.log(`[M.T.R.O.N] Gesture Confirmed: ${currentGesture}`);
+        window.dispatchEvent(new CustomEvent('mtron-command', { detail: { action: currentGesture } }));
+        
+        // Lock out new commands for 1 second
+        this.cooldownUntil = now + 1000;
+      }
+    } else if (now > this.cooldownUntil) {
+       this.lastGesture = 'NONE';
     }
 
-    return 'NONE';
+    if (currentGesture !== 'NONE') {
+        this.lastGesture = currentGesture;
+    }
+
+    return currentGesture;
   }
 }
