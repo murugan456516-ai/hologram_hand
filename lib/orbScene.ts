@@ -34,8 +34,10 @@ export class OrbScene {
   private rasenganCore!: THREE.Mesh;
   private rasenganShell!: THREE.Mesh;
   private rasenganRings: THREE.Mesh[] = [];
+  private outerRings: THREE.Mesh[] = []; // The actual outer orbital rings
   
   private dustSystem!: THREE.Points;
+  
   private animationFrameId?: number;
 
   constructor(container: HTMLDivElement) {
@@ -60,7 +62,7 @@ export class OrbScene {
 
     // --- Unified Hologram Skin Materials (Gold & Orange) ---
     const meshOuterMat = new THREE.MeshBasicMaterial({
-      color: 0xffaa00, // Bright Gold
+      color: 0xffaa00, // Bright Gold Gauntlet
       wireframe: true,
       transparent: true,
       opacity: 0.9,
@@ -139,18 +141,18 @@ export class OrbScene {
     // --- Create the Rasengan Globe ---
     this.handGlobe = new THREE.Group();
 
-    // 1. The Dense Inner Core (Solid Bright Sphere)
+    // 1. The Dense Inner Core (Pale Blue)
     const coreMat = new THREE.MeshBasicMaterial({
-      color: 0xccffff, // Bright pale blue/white core
+      color: 0xccffff, 
       transparent: true,
       opacity: 0.9,
       blending: THREE.AdditiveBlending
     });
     this.rasenganCore = new THREE.Mesh(new THREE.SphereGeometry(0.05, 32, 32), coreMat);
 
-    // 2. The Dense Outer Shell (High-Poly Wireframe)
+    // 2. The Dense Outer Shell (Deep Chakra Blue)
     const shellMat = new THREE.MeshBasicMaterial({
-      color: 0x0066ff, // Deep chakra blue
+      color: 0x0066ff, 
       wireframe: true,
       transparent: true,
       opacity: 0.35,
@@ -158,22 +160,41 @@ export class OrbScene {
     });
     this.rasenganShell = new THREE.Mesh(new THREE.SphereGeometry(0.20, 24, 24), shellMat);
 
-    // 3. Swirling Chakra Rings
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: 0x00aaff, // Mid blue rings
+    // 3. Swirling Chakra Rings (Mid Blue, Inside Shell)
+    const innerRingMat = new THREE.MeshBasicMaterial({
+      color: 0x00aaff, 
       transparent: true,
       opacity: 0.6,
       blending: THREE.AdditiveBlending
     });
-    const ringGeo = new THREE.TorusGeometry(0.17, 0.003, 16, 64);
+    const innerRingGeo = new THREE.TorusGeometry(0.17, 0.003, 16, 64);
     
-    // Create 3 rings on different initial axes
     for (let i = 0; i < 3; i++) {
-      const ring = new THREE.Mesh(ringGeo, ringMat);
+      const ring = new THREE.Mesh(innerRingGeo, innerRingMat);
       ring.rotation.x = Math.random() * Math.PI;
       ring.rotation.y = Math.random() * Math.PI;
       this.rasenganRings.push(ring);
       this.handGlobe.add(ring);
+    }
+
+    // 4. Actual Outer Orbital Rings (Cyan, Outside Shell)
+    const outerRingMat = new THREE.MeshBasicMaterial({
+      color: 0x00ffff, // Bright cyan
+      transparent: true,
+      opacity: 0.7,
+      blending: THREE.AdditiveBlending
+    });
+    // Radius 0.24 is outside the 0.20 shell
+    const outerRingGeo = new THREE.TorusGeometry(0.24, 0.002, 16, 64);
+
+    for (let i = 0; i < 3; i++) {
+      const outerRing = new THREE.Mesh(outerRingGeo, outerRingMat);
+      // Give each ring a random initial tilt
+      outerRing.rotation.x = Math.random() * Math.PI;
+      outerRing.rotation.y = Math.random() * Math.PI;
+      
+      this.outerRings.push(outerRing);
+      this.handGlobe.add(outerRing);
     }
 
     this.handGlobe.add(this.rasenganCore);
@@ -181,7 +202,7 @@ export class OrbScene {
     this.handGlobe.visible = false;
     this.scene.add(this.handGlobe);
 
-    // --- Ambient Dust ---
+    // --- Global Ambient Dust ---
     const dustGeo = new THREE.BufferGeometry();
     const dustCount = 300;
     const dustPositions = new Float32Array(dustCount * 3);
@@ -190,7 +211,7 @@ export class OrbScene {
     }
     dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
     const dustMaterial = new THREE.PointsMaterial({
-      color: 0x00ccff, // Blue ambient dust
+      color: 0x00ccff, // Blue ambient dust to match energy
       size: 0.015,
       transparent: true,
       opacity: 0.4,
@@ -214,31 +235,49 @@ export class OrbScene {
       mesh.rotation.y = time * 0.5;
     });
 
-    // --- Rasengan Animation Logic ---
-    // The core pulsates slightly
+    // --- Rasengan Core & Shell Animation Logic ---
     const scalePulse = 1.0 + Math.sin(time * 10) * 0.05;
     this.rasenganCore.scale.set(scalePulse, scalePulse, scalePulse);
 
-    // The dense outer shell spins rapidly
     this.rasenganShell.rotation.y -= 0.08;
     this.rasenganShell.rotation.x += 0.04;
 
-    // The rings swirl chaotically at high speeds
+    // Spin inner rings
     this.rasenganRings.forEach((ring, i) => {
       ring.rotation.x += 0.1 + (i * 0.02);
       ring.rotation.y += 0.12 + (i * 0.03);
       ring.rotation.z -= 0.05 + (i * 0.01);
     });
+
+    // --- Outer Rings Animation Logic ---
+    // Spin outer rings in an aggressive, chaotic pattern
+    this.outerRings.forEach((ring, i) => {
+      ring.rotation.x += 0.06 + (i * 0.015);
+      ring.rotation.y += 0.09 + (i * 0.02);
+      ring.rotation.z -= 0.04 + (i * 0.01);
+    });
     
+    // Slow drift for the background ambient dust
     this.dustSystem.rotation.y = time * 0.05;
 
     this.renderer.render(this.scene, this.camera);
   };
 
-  public updateArmor(landmarks: any[]) {
+  public updateArmor(handsOrLandmarks: any[]) {
+    if (!handsOrLandmarks || handsOrLandmarks.length === 0) return;
+
+    let trackedHand;
+    if (handsOrLandmarks[0].x !== undefined) {
+      trackedHand = handsOrLandmarks; 
+    } else {
+      trackedHand = handsOrLandmarks[0]; 
+    }
+
+    if (!trackedHand || typeof trackedHand.map !== 'function') return;
+
     let centerX = 0, centerY = 0, centerZ = 0;
 
-    const trackedPoints = landmarks.map(lm => {
+    const trackedPoints = trackedHand.map((lm: any) => {
       const x = -(lm.x - 0.5) * 2.5 * (this.container.clientWidth / this.container.clientHeight);
       const y = -(lm.y - 0.5) * 2.5;
       const z = -lm.z * 2.0; 
@@ -257,15 +296,13 @@ export class OrbScene {
     const rotationMultiplier = Math.abs(rollAngle) / Math.PI;
     const zoomScale = 1.0 + (rotationMultiplier * 2.5); 
 
-    // 1. Update Hand Joints
-    trackedPoints.forEach((point, i) => {
+    trackedPoints.forEach((point: THREE.Vector3, i: number) => {
       this.innerJoints[i].position.copy(point);
       this.outerJoints[i].position.copy(point);
       this.innerJoints[i].visible = true;
       this.outerJoints[i].visible = true;
     });
 
-    // 2. Update Polygonal Bones
     const yAxis = new THREE.Vector3(0, 1, 0);
 
     HAND_CONNECTIONS.forEach(([start, end], i) => {
@@ -289,11 +326,10 @@ export class OrbScene {
       innerBone.visible = true;
     });
 
-    // 3. Apply Barycentric Deformation to Webbing Grid
     const webArray = this.webGeometry.attributes.position.array as Float32Array;
-    const p0 = trackedPoints[0]; // Wrist
-    const p2 = trackedPoints[2]; // Thumb 2nd dot
-    const p6 = trackedPoints[6]; // Index 2nd dot
+    const p0 = trackedPoints[0]; 
+    const p2 = trackedPoints[2]; 
+    const p6 = trackedPoints[6]; 
     
     let wIdx = 0;
     for (let i = 0; i <= this.webSegments; i++) {
@@ -313,13 +349,13 @@ export class OrbScene {
     this.webInnerMesh.visible = true;
     this.webOuterMesh.visible = true;
 
-    // 4. Apply Dynamic Globe Position
     const avgX = centerX / 21;
     const avgY = centerY / 21;
     const avgZ = centerZ / 21;
 
     const baseRadius = 0.20;
-    const floatingGap = 0.20;
+    const floatingGap = 0.30; 
+    
     const dynamicYOffset = floatingGap + (baseRadius * zoomScale);
 
     this.handGlobe.position.set(avgX, avgY + dynamicYOffset, avgZ);

@@ -64,6 +64,7 @@ export default function Home() {
       const timestamp = performance.now();
       const results = tracker.detect(video, timestamp);
 
+      // Reverted to specifically pass the first hand to avoid mapping errors
       if (results && results.landmarks && results.landmarks.length > 0) {
         sceneRef.current?.updateArmor(results.landmarks[0]);
         setStatus('TRACKING ACTIVE');
